@@ -212,14 +212,16 @@ class EASE:
         return scores
 
     def _predict(
-        self, user_vector: csr_matrix, mask_seen: bool = True
+        self,
+        user_vector: csr_matrix,
+        exclude_positive_interactions: bool = True,
     ) -> np.ndarray:
         self._check_fitted()
         self._check_user_vector(user_vector)
 
         scores = np.asarray(user_vector @ self.B_).ravel()
 
-        if mask_seen:
+        if exclude_positive_interactions:
             scores = self._mask_positive_interactions(scores, user_vector)
 
         return scores
@@ -228,7 +230,7 @@ class EASE:
         self,
         user_vector: csr_matrix,
         n: int | None = 10,
-        mask_seen: bool = True,
+        exclude_positive_interactions: bool = True,
     ) -> np.ndarray:
         """
         Generate top-N recommendations for a user.
@@ -239,7 +241,7 @@ class EASE:
             Sparse 1 x n_items vector representing user's interaction history.
         n:
             Number of items to recommend. If None, returns all items ranked.
-        mask_seen:
+        exclude_positive_interactions:
             If True, excludes items with positive interactions from recommendations.
 
         Returns
@@ -247,7 +249,10 @@ class EASE:
         np.ndarray:
             Array of item indices ranked by score (highest first).
         """
-        scores = self._predict(user_vector=user_vector, mask_seen=mask_seen)
+        scores = self._predict(
+            user_vector=user_vector,
+            exclude_positive_interactions=exclude_positive_interactions,
+        )
         return self._top_n(scores, n)
 
     def related_items(
@@ -550,14 +555,17 @@ class GaussianExplorationEASE(EASE):
     def _sample_scores(
         self,
         user_vector: csr_matrix,
-        mask_seen: bool = True,
+        exclude_positive_interactions: bool = True,
         exploration_scale: float = 0.5,
     ) -> np.ndarray:
         self._check_fitted()
         self._check_user_vector(user_vector)
 
         # Use model-specific prediction so subclasses can share this sampler.
-        mean = self._predict(user_vector, mask_seen=False)
+        mean = self._predict(
+            user_vector,
+            exclude_positive_interactions=False,
+        )
         variance = self._predictive_variance(user_vector)
         std = np.sqrt(variance)
 
@@ -566,7 +574,7 @@ class GaussianExplorationEASE(EASE):
             scale=exploration_scale * std,
         )
 
-        if mask_seen:
+        if exclude_positive_interactions:
             sampled_scores = self._mask_positive_interactions(
                 sampled_scores, user_vector
             )
@@ -578,7 +586,7 @@ class GaussianExplorationEASE(EASE):
         user_vector: csr_matrix,
         n: int | None = 10,
         exploration_scale: float = 0.5,
-        mask_seen: bool = True,
+        exclude_positive_interactions: bool = True,
     ) -> np.ndarray:
         """
         Generate top-N recommendations with exploration for a user.
@@ -592,7 +600,7 @@ class GaussianExplorationEASE(EASE):
         exploration_scale:
             Controls exploration intensity. 0.0 = no exploration (deterministic),
             1.0 = use posterior variance directly, >1.0 = aggressive exploration.
-        mask_seen:
+        exclude_positive_interactions:
             If True, excludes items with positive interactions from recommendations.
 
         Returns
@@ -606,12 +614,13 @@ class GaussianExplorationEASE(EASE):
         if exploration_scale > 0:
             scores = self._sample_scores(
                 user_vector=user_vector,
-                mask_seen=mask_seen,
+                exclude_positive_interactions=exclude_positive_interactions,
                 exploration_scale=exploration_scale,
             )
         else:
             scores = self._predict(
-                user_vector=user_vector, mask_seen=mask_seen
+                user_vector=user_vector,
+                exclude_positive_interactions=exclude_positive_interactions,
             )
 
         return self._top_n(scores, n)
@@ -801,7 +810,9 @@ class LowRankEASE(EASE):
             raise IndexError(f"item_id={item_id} is out of bounds.")
 
     def _predict(
-        self, user_vector: csr_matrix, mask_seen: bool = True
+        self,
+        user_vector: csr_matrix,
+        exclude_positive_interactions: bool = True,
     ) -> np.ndarray:
         self._check_fitted()
         self._check_user_vector(user_vector)
@@ -811,7 +822,7 @@ class LowRankEASE(EASE):
         cross = (t * self.lambda_inv_) @ self.V_.T  # (n,)
         scores = -cross / self.P_k_diag_
 
-        if mask_seen:
+        if exclude_positive_interactions:
             scores = self._mask_positive_interactions(scores, user_vector)
 
         return scores
@@ -1121,7 +1132,9 @@ class LowRankGaussianExplorationEASE(GaussianExplorationEASE):
             raise IndexError(f"item_id={item_id} is out of bounds.")
 
     def _predict(
-        self, user_vector: csr_matrix, mask_seen: bool = True
+        self,
+        user_vector: csr_matrix,
+        exclude_positive_interactions: bool = True,
     ) -> np.ndarray:
         self._check_fitted()
         self._check_user_vector(user_vector)
@@ -1137,7 +1150,7 @@ class LowRankGaussianExplorationEASE(GaussianExplorationEASE):
 
         scores = -cross / self.P_exact_diag_
 
-        if mask_seen:
+        if exclude_positive_interactions:
             scores = self._mask_positive_interactions(scores, user_vector)
 
         return scores
