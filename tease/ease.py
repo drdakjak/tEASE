@@ -556,7 +556,8 @@ class GaussianExplorationEASE(EASE):
         self._check_fitted()
         self._check_user_vector(user_vector)
 
-        mean = np.asarray(user_vector @ self.B_).ravel()
+        # Use model-specific prediction so subclasses can share this sampler.
+        mean = self._predict(user_vector, mask_seen=False)
         variance = self._predictive_variance(user_vector)
         std = np.sqrt(variance)
 
@@ -770,6 +771,11 @@ class LowRankEASE(EASE):
         ):
             raise RuntimeError("Model is not fitted yet.")
 
+    @property
+    def n_items(self) -> int:
+        self._check_fitted()
+        return self.V_.shape[0]
+
     def _check_user_vector(self, user_vector: csr_matrix) -> None:
         self._check_fitted()
 
@@ -889,13 +895,6 @@ class LowRankEASE(EASE):
         self.P_k_diag_ = state["P_k_diag_"]
         self.effective_l2_ = state["effective_l2_"]
         self.gram_scale_ = state["gram_scale_"]
-
-    def save(self, path: str | Path) -> None:
-        self._check_fitted()
-        path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "wb") as f:
-            pickle.dump(self._get_state(), f, protocol=pickle.HIGHEST_PROTOCOL)
 
     @classmethod
     def load(cls, path: str | Path) -> "LowRankEASE":
@@ -1092,6 +1091,11 @@ class LowRankGaussianExplorationEASE(GaussianExplorationEASE):
         ):
             raise RuntimeError("Model is not fitted yet.")
 
+    @property
+    def n_items(self) -> int:
+        self._check_fitted()
+        return self.V_.shape[0]
+
     def _check_user_vector(self, user_vector: csr_matrix) -> None:
         self._check_fitted()
 
@@ -1162,31 +1166,6 @@ class LowRankGaussianExplorationEASE(GaussianExplorationEASE):
         variance = q - (cross_full**2 / self.P_exact_diag_)
 
         return np.maximum(variance, 0.0).astype(self.storage_dtype, copy=False)
-
-    def _sample_scores(
-        self,
-        user_vector: csr_matrix,
-        mask_seen: bool = True,
-        exploration_scale: float = 0.5,
-    ) -> np.ndarray:
-        self._check_fitted()
-        self._check_user_vector(user_vector)
-
-        mean = self._predict(user_vector, mask_seen=False)
-        variance = self._predictive_variance(user_vector)
-        std = np.sqrt(variance)
-
-        sampled_scores = self.rng.normal(
-            loc=mean,
-            scale=exploration_scale * std,
-        )
-
-        if mask_seen:
-            sampled_scores = self._mask_positive_interactions(
-                sampled_scores, user_vector
-            )
-
-        return sampled_scores
 
     @property
     def item_factors(self) -> np.ndarray:
@@ -1270,13 +1249,6 @@ class LowRankGaussianExplorationEASE(GaussianExplorationEASE):
         self.effective_l2_ = state["effective_l2_"]
         self.gram_scale_ = state["gram_scale_"]
         self.rng.bit_generator.state = state["rng_state"]
-
-    def save(self, path: str | Path) -> None:
-        self._check_fitted()
-        path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "wb") as f:
-            pickle.dump(self._get_state(), f, protocol=pickle.HIGHEST_PROTOCOL)
 
     @classmethod
     def load(cls, path: str | Path) -> "LowRankGaussianExplorationEASE":
