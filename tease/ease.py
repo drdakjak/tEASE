@@ -245,6 +245,10 @@ class EASE:
         scores = self._predict(user_vector=user_vector, mask_seen=mask_seen)
         return self._top_n(scores, n)
 
+    def n_items(self) -> int:
+        self._check_fitted()
+        return self.B_.shape[0]
+
     def related_items(
         self,
         item_id: int,
