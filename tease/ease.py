@@ -137,7 +137,6 @@ class EASE:
         self.compute_dtype = compute_dtype
         self.storage_dtype = storage_dtype or compute_dtype
 
-        self.X_: csr_matrix | None = None
         self.B_: np.ndarray | None = None
         self.effective_l2_: float | None = None
         self.gram_scale_: float | None = None
@@ -147,7 +146,6 @@ class EASE:
             X = csr_matrix(X)
 
         X = X.tocsr().astype(self.compute_dtype)
-        self.X_ = X
 
         G = (X.T @ X).toarray().astype(self.compute_dtype, copy=False)
 
@@ -331,7 +329,6 @@ class EASE:
         }
 
     def _restore_state(self, state: dict) -> None:
-        self.X_ = None  # Training data not stored
         self.B_ = state["B_"]
         self.effective_l2_ = state["effective_l2_"]
         self.gram_scale_ = state["gram_scale_"]
